@@ -17,12 +17,38 @@ app.post('/doc', async (req, res) => {
     const { key } = req.body
     try {
         const resp = await v0betaCreateDocument(process.env.LUNADB_HOST, key, opts)
+        if (resp.status === 201) {
+            const initialContent = await v0betaSyncDocument(
+                process.env.LUNADB_HOST,
+                key,
+                "0",
+                [{
+                    op: "insert",
+                    pointer: "/doc",
+                    content: ""
+                }]
+            )
+            if (initialContent.status === 201) {
+                console.log("Document created: " + key)
+            } else {
+                console.log("Failed to create initial document contents. Document should be recreated!", initialContent)
+                res.status(500).end()
+                return
+            }
+        } else if (resp.status !== 409) {
+            console.log("Failed to create document")
+            res.status(500).end()
+            return
+        }
         res.status(resp.status).end()
     } catch (e) {
         if (e.status < 0) {
             res.status(500).end()
-        } else {
+        } else if (e.status !== 409) {
+            console.log(e)
             res.status(e.status).end()
+        } else {
+            res.status(200).end()
         }
     }
 })
@@ -31,8 +57,10 @@ app.delete('/doc', async (req, res) => {
     const { key } = req.body
     try {
         const resp = await v0betaDeleteDocument(process.env.LUNADB_HOST, key, opts)
+        console.log("Document deleted: " + key)
         res.status(resp.status).end()
     } catch (e) {
+        console.log(e);
         if (e.status < 0) {
             res.status(500).end()
         } else {
@@ -42,11 +70,12 @@ app.delete('/doc', async (req, res) => {
 })
 
 app.get('/doc', async (req, res) => {
-    const { key } = req.body
+    const { key } = req.query
     try {
         const resp = await v0betaGetDocumentContent(process.env.LUNADB_HOST, key, opts)
         res.status(resp.status).json(resp.content)
     } catch (e) {
+        console.log(e);
         if (e.status < 0) {
             res.status(500).end()
         } else {
@@ -83,7 +112,8 @@ app.patch('/doc', async (req, res) => {
             key, 
             baseTimestamp, 
             delta, 
-            sessionId, 
+            sessionId,
+            "joined",
             sessionMetadata, 
             fetchAllPresenceData, 
             false, 
@@ -91,6 +121,7 @@ app.patch('/doc', async (req, res) => {
         )
         res.status(resp.status).json(resp.content)
     } catch (e) {
+        console.log(e);
         if (e.status < 0) {
             res.status(500).end()
         } else {

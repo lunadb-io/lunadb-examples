@@ -3,7 +3,7 @@ export default {
   input: "./src/codemirror.js",
   output: {
     file: "./static/dist/codemirror.bundle.js",
-    format: "iife"
+    format: "es"
   },
   plugins: [nodeResolve()]
 }
