@@ -1,0 +1,23 @@
+{
+  "name": "lunadb-examples",
+  "version": "1.0.0",
+  "description": "Repository of example applications using LunaDB",
+  "type": "module",
+  "scripts": {
+    "serve": "node src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lunadb-io/lunadb-examples.git"
+  },
+  "author": "Nicholas Wold",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/lunadb-io/lunadb-examples/issues"
+  },
+  "homepage": "https://github.com/lunadb-io/lunadb-examples#readme",
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
