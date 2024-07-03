@@ -114,21 +114,17 @@ function syncExtension(initialVersion) {
 }
 
 try {
-    const createResponse = await fetch("/doc", {
+    const createOrGetResponse = await fetch("/doc", {
         method: "POST",
         body: JSON.stringify({ key: "markdown" }),
         headers: {
             "content-type": "application/json"
         }
     });
-    if (!createResponse.ok && createResponse.status != 409) {
+    if (!createOrGetResponse.ok) {
         throw new Error("Failed to create document");
     }
-    const contentResponse = await fetch("/doc?key=markdown");
-    if (!contentResponse.ok) {
-        throw new Error("Failed to read document");
-    }
-    const body = await contentResponse.json();
+    const body = await createOrGetResponse.json();
     const hlc = body.hlc;
     let editor = new EditorView({
         extensions: [basicSetup, markdown(), syncExtension(hlc)],

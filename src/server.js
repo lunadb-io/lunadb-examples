@@ -16,9 +16,11 @@ if (process.env.LUNADB_PASSWD) {
 app.post('/doc', async (req, res) => {
     const { key } = req.body
     try {
-        const resp = await v0betaCreateDocument(process.env.LUNADB_HOST, key, opts)
-        if (resp.status === 201) {
-            const initialContent = await v0betaSyncDocument(
+        await v0betaCreateDocument(process.env.LUNADB_HOST, key, opts)
+        res.status(201)
+
+        try {
+            await v0betaSyncDocument(
                 process.env.LUNADB_HOST,
                 key,
                 "0",
@@ -28,28 +30,28 @@ app.post('/doc', async (req, res) => {
                     content: ""
                 }]
             )
-            if (initialContent.status === 201) {
-                console.log("Document created: " + key)
-            } else {
-                console.log("Failed to create initial document contents. Document should be recreated!", initialContent)
-                res.status(500).end()
-                return
-            }
-        } else if (resp.status !== 409) {
-            console.log("Failed to create document")
+        } catch (e) {
+            console.log("Failed to create initial document contents. Document should be recreated!", e)
             res.status(500).end()
             return
         }
-        res.status(resp.status).end()
+
+        console.log("Document created: " + key)
     } catch (e) {
-        if (e.status < 0) {
-            res.status(500).end()
-        } else if (e.status !== 409) {
-            console.log(e)
-            res.status(e.status).end()
+        if (e.status === 409) {
+            res.status(200)
         } else {
-            res.status(200).end()
+            console.log("Failed to create document", e)
+            res.status(500).end()
+            return
         }
+    }
+
+    try {
+        const resp = await v0betaGetDocumentContent(process.env.LUNADB_HOST, key, opts)
+        res.json(resp.content)
+    } catch (e) {
+        res.status(500).end()
     }
 })
 
@@ -59,21 +61,6 @@ app.delete('/doc', async (req, res) => {
         const resp = await v0betaDeleteDocument(process.env.LUNADB_HOST, key, opts)
         console.log("Document deleted: " + key)
         res.status(resp.status).end()
-    } catch (e) {
-        console.log(e);
-        if (e.status < 0) {
-            res.status(500).end()
-        } else {
-            res.status(e.status).end()
-        }
-    }
-})
-
-app.get('/doc', async (req, res) => {
-    const { key } = req.query
-    try {
-        const resp = await v0betaGetDocumentContent(process.env.LUNADB_HOST, key, opts)
-        res.status(resp.status).json(resp.content)
     } catch (e) {
         console.log(e);
         if (e.status < 0) {
