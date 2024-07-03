@@ -12,23 +12,27 @@ function syncExtension(initialVersion) {
         destroyed = false
         syncing = false
         version = initialVersion
+        disableUpdate = false
 
         constructor(view) {
             this.view = view
             this.bufferedChanges = this.view.state.changes()
             this.callbackId = setInterval(this.sync.bind(this), 2000)
         }
+
         update(update) {
-            if (!this.destroyed && update.docChanged && !this.applyingRemote) {
+            if (!this.destroyed && !this.disableUpdate && update.docChanged) {
                 this.bufferedChanges = this.bufferedChanges.compose(update.changes)
             }
         }
+
         destroy() {
             this.destroyed = true
             clearInterval(this.callbackId)
         }
+
         async sync() {
-            if (this.syncing) {
+            if (this.syncing || this.destroyed) {
                 return;
             }
 
@@ -53,10 +57,12 @@ function syncExtension(initialVersion) {
 
                 if (syncResp.ok) {
                     const body = await syncResp.json()
-                    let remoteChangeset = this.toChangeSet(body.changes, revertInFlightSet.newLength)
+                    let remoteChangeset = this.toChangeSet(body.changes, this.bufferedChanges.newLength)
                     if (!remoteChangeset.empty) {
                         // todo: lunadb needs to not return our local changes in its response
+                        this.disableUpdate = true
                         this.view.dispatch({changes: remoteChangeset, remote: true})
+                        this.disableUpdate = false
                         this.bufferedChanges = this.bufferedChanges.map(remoteChangeset)
                     }
                     this.version = body.hlc
@@ -72,6 +78,7 @@ function syncExtension(initialVersion) {
             document.getElementById("lastSynced").innerText = "Last synced at: " + this.version
             this.syncing = false;
         }
+
         toTransaction(changeset) {
             let buffer = new DocumentTransaction(this.version, [])
             changeset.iterChanges((fromA, toA, fromB, toB, inserted) => {
@@ -88,6 +95,7 @@ function syncExtension(initialVersion) {
             })
             return buffer
         }
+
         toChangeSet(changes, baseLength) {
             let changeset = []
             for (const change of changes) {
