@@ -4,6 +4,8 @@ import { ChangeSet } from "@codemirror/state";
 import { markdown } from "@codemirror/lang-markdown";
 import { DocumentTransaction } from "@lunadb-io/lunadb-client-js";
 
+let syncPaused = false;
+
 function syncExtension(initialVersion) {
   document.getElementById("lastSynced").innerText =
     "Last synced at: " + initialVersion;
@@ -11,9 +13,9 @@ function syncExtension(initialVersion) {
   return ViewPlugin.fromClass(
     class {
       clientId = crypto.randomUUID();
+      version = initialVersion;
       destroyed = false;
       syncing = false;
-      version = initialVersion;
       applyingUpdates = false;
 
       constructor(view) {
@@ -34,7 +36,7 @@ function syncExtension(initialVersion) {
       }
 
       async sync() {
-        if (this.syncing || this.destroyed) {
+        if (this.syncing || this.destroyed || syncPaused) {
           return;
         }
 
@@ -42,54 +44,60 @@ function syncExtension(initialVersion) {
         let syncingChanges = this.bufferedChanges;
         this.bufferedChanges = this.view.state.changes();
         let buffer = this.toTransaction(syncingChanges);
-        let failed = false;
 
         try {
-          const syncResp = await fetch("/doc", {
-            method: "PATCH",
-            headers: {
-              "content-type": "application/json",
-            },
-            body: JSON.stringify({
-              key: "markdown",
-              baseTimestamp: buffer.baseTimestamp,
-              delta: buffer.changes,
-              sessionId: this.clientId,
-            }),
-          });
+          const body = await this.fetchUpdates(buffer);
 
-          if (syncResp.ok) {
-            const body = await syncResp.json();
-
-            let rawChangeset = this.toChangeSet(body.changes);
-            let remoteChangeset = ChangeSet.of(
-              rawChangeset,
-              syncingChanges.length
-            ).map(syncingChanges, true);
-
-            if (!remoteChangeset.empty) {
-              let remapped = remoteChangeset.map(this.bufferedChanges, true);
-              this.applyChanges(remapped);
-              this.bufferedChanges = this.bufferedChanges.map(remoteChangeset);
-            }
-            this.version = body.hlc;
-          } else {
-            console.log("Failed to synchronize: request error", syncResp);
-            failed = true;
+          if (!body) {
+            console.log("Request error", syncResp);
+            this.bufferedChanges = syncingChanges.compose(this.bufferedChanges);
+            return;
           }
-        } catch (e) {
-          console.log("Failed to synchronize: fetch error", e);
-          failed = true;
-        }
 
-        if (failed) {
+          let remoteChangeset = ChangeSet.of(
+            this.toChangeSet(body.changes),
+            syncingChanges.length
+          ).map(syncingChanges, true);
+
+          if (!remoteChangeset.empty) {
+            let remapped = remoteChangeset.map(this.bufferedChanges, true);
+            this.applyChanges(remapped);
+            this.bufferedChanges = this.bufferedChanges.map(remoteChangeset);
+          }
+
+          this.version = body.hlc;
+        } catch (e) {
+          console.log("Failed to synchronize", e);
           document.getElementById("lastSynced").innerText = "Failed to sync!";
           this.destroy();
-        } else {
-          document.getElementById("lastSynced").innerText =
-            "Last synced at: " + this.version;
+          return;
         }
+
+        document.getElementById("lastSynced").innerText =
+          "Last synced at: " + this.version;
         this.syncing = false;
+      }
+
+      async fetchUpdates(txn) {
+        const syncResp = await fetch("/doc", {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({
+            key: "markdown",
+            baseTimestamp: txn.baseTimestamp,
+            delta: txn.changes,
+            sessionId: this.clientId,
+          }),
+        });
+
+        if (syncResp.ok) {
+          return await syncResp.json();
+        } else {
+          console.log("Request error", syncResp);
+          return null;
+        }
       }
 
       applyChanges(changeset) {
@@ -143,8 +151,20 @@ try {
   }
   const body = await createOrGetResponse.json();
   const hlc = body.hlc;
+  const ext = syncExtension(hlc);
+
+  document.getElementById("pauseButton").onclick = function () {
+    if (syncPaused) {
+      syncPaused = false;
+      document.getElementById("pauseButton").innerText = "Pause Sync";
+    } else {
+      syncPaused = true;
+      document.getElementById("pauseButton").innerText = "Resume Sync";
+    }
+  };
+
   let editor = new EditorView({
-    extensions: [basicSetup, markdown(), syncExtension(hlc)],
+    extensions: [basicSetup, markdown(), ext],
     parent: document.body,
     doc: body.contents.doc,
   });
