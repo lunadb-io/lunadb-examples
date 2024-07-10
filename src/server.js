@@ -108,6 +108,7 @@ app.patch("/doc", async (req, res) => {
       key,
       baseTimestamp,
       delta,
+      true,
       sessionId,
       "joined",
       sessionMetadata,

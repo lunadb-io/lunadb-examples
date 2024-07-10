@@ -19,7 +19,7 @@
   },
   "homepage": "https://github.com/lunadb-io/lunadb-examples#readme",
   "dependencies": {
-    "@lunadb-io/lunadb-client-js": "^0.1.4",
+    "@lunadb-io/lunadb-client-js": "^0.2.1",
     "dotenv": "^16.4.5",
     "express": "^4.19.2"
   },
