@@ -56,8 +56,8 @@ function syncExtension(initialVersion) {
 
           let remoteChangeset = ChangeSet.of(
             this.toChangeSet(body.changes),
-            syncingChanges.length
-          ).map(syncingChanges, true);
+            syncingChanges.newLength
+          );
 
           if (!remoteChangeset.empty) {
             let remapped = remoteChangeset.map(this.bufferedChanges, true);
